@@ -219,6 +219,7 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
                     class="prose-sm min-h-[120px] w-full overflow-x-auto break-words rounded-md border border-slate-300 bg-card px-3 py-2.5 text-sm leading-relaxed text-card-foreground focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
                     [contentEditable]="true"
                     [innerHTML]="bodyHtmlSafe()"
+                    (input)="onRichInput(richEditor)"
                     (paste)="onRichPaste($event, richEditor)"
                     (blur)="saveBodyHtml(c, richEditor)"
                   ></div>
@@ -1115,6 +1116,12 @@ export class CardDetailComponent {
     if (!html) return false;
     const text = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
     return text.length > 0 || /<img|<video|<a\b/i.test(html);
+  }
+
+  /** Hide/show the placeholder while typing (bodyEmpty otherwise only
+   *  updates on load/blur/paste, leaving the placeholder over the text). */
+  onRichInput(el: HTMLElement) {
+    this.bodyEmpty.set(!this.htmlHasContent(el.innerHTML));
   }
 
   /** Persist the editor's HTML on blur. */
