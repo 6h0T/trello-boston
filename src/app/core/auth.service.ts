@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Session, User } from '@supabase/supabase-js';
-import { SupabaseService } from './supabase.service';
+import { AUTH_STORAGE_KEY, SupabaseService } from './supabase.service';
 import { CurrentUserStore } from './current-user.store';
 import { MembersService } from './services/members.service';
 import { Member, LABEL_COLORS } from './models/models';
@@ -25,10 +25,19 @@ export class AuthService {
   readonly session = signal<Session | null>(null);
   readonly isAuthenticated = computed(() => this.session() != null);
 
-  /** Called once at startup (APP_INITIALIZER) to restore an existing session. */
+  /**
+   * Called once at startup (APP_INITIALIZER) to restore an existing session.
+   * Must never block bootstrap on the network: if Supabase is unreachable the
+   * app renders as logged-out instead of hanging on a white screen.
+   */
   async init(): Promise<void> {
-    const { data } = await this.sb.client.auth.getSession();
-    await this.applySession(data.session);
+    const session = await Promise.race([
+      this.sb.client.auth.getSession().then(({ data }) => data.session),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+    ]);
+    // applySession sets the session signal synchronously (guards need it before
+    // the first navigation); the profile/roster sync continues in background.
+    void this.applySession(session);
     this.sb.client.auth.onAuthStateChange((_event, session) => {
       void this.applySession(session);
     });
@@ -110,8 +119,23 @@ export class AuthService {
     await this.applySession(data.session);
   }
 
+  /**
+   * Local-first sign-out: clears the in-memory session right away so the UI
+   * can navigate, then best-effort revokes it on the server. If Supabase is
+   * unreachable, the stored session is still purged so a reload stays
+   * logged-out instead of hanging.
+   */
   async signOut(): Promise<void> {
-    await this.sb.client.auth.signOut();
     await this.applySession(null);
+    try {
+      await Promise.race([
+        this.sb.client.auth.signOut({ scope: 'local' }),
+        new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+      ]);
+    } catch {
+      /* server unreachable — the local session is cleared below anyway */
+    } finally {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+    }
   }
 }

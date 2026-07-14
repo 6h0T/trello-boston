@@ -2,6 +2,9 @@ import { Injectable } from '@angular/core';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { environment } from '../../environments/environment';
 
+/** localStorage key where supabase-js persists the session. */
+export const AUTH_STORAGE_KEY = 'tb-auth';
+
 /**
  * Thin wrapper around the Supabase client.
  * `table(name)` automatically applies the tb_ prefix so feature code
@@ -17,7 +20,7 @@ export class SupabaseService {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
-        storageKey: 'tb-auth',
+        storageKey: AUTH_STORAGE_KEY,
       },
       realtime: { params: { eventsPerSecond: 10 } },
     });
