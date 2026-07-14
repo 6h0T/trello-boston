@@ -390,11 +390,21 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
 
               <!-- Comments -->
               <section>
-                <div class="mb-3 flex items-center gap-2">
-                  <app-icon name="message" [size]="18" class="text-slate-500" />
-                  <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                    Comentarios
-                  </h3>
+                <div class="mb-3 flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2">
+                    <app-icon name="message" [size]="18" class="text-slate-500" />
+                    <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                      Comentarios
+                    </h3>
+                  </div>
+                  <button
+                    class="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                    [title]="'Cambiar orden'"
+                    (click)="toggleCommentsOrder()"
+                  >
+                    <app-icon name="arrow-up-down" [size]="13" />
+                    {{ commentsNewestFirst() ? 'Más recientes primero' : 'Más antiguos primero' }}
+                  </button>
                 </div>
 
                 <!-- Composer -->
@@ -424,7 +434,7 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
 
                 <!-- List -->
                 <ul class="mt-4 space-y-4">
-                  @for (cm of c.comments; track cm.id) {
+                  @for (cm of sortedComments(); track cm.id) {
                     <li class="flex items-start gap-2">
                       <app-avatar [member]="cm.member" [size]="32" />
                       <div class="flex-1">
@@ -813,6 +823,22 @@ export class CardDetailComponent {
   readonly boardLabels = this.store.labels;
   readonly currentUser = this.currentUserStore.current;
   readonly currentId = this.currentUserStore.currentId;
+
+  // ---- Comments order ----
+  /** Preferencia persistida; por defecto, más recientes primero. */
+  readonly commentsNewestFirst = signal(localStorage.getItem('tb-comments-order') !== 'oldest');
+  readonly sortedComments = computed(() => {
+    const list = this.card()?.comments ?? [];
+    const dir = this.commentsNewestFirst() ? -1 : 1;
+    return [...list].sort(
+      (a, b) => dir * (a.created_at ?? '').localeCompare(b.created_at ?? ''),
+    );
+  });
+
+  toggleCommentsOrder() {
+    this.commentsNewestFirst.update((v) => !v);
+    localStorage.setItem('tb-comments-order', this.commentsNewestFirst() ? 'newest' : 'oldest');
+  }
 
   readonly listName = computed(() => {
     const c = this.card();
