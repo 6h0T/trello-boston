@@ -2,8 +2,10 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  HostBinding,
   HostListener,
   Input,
+  booleanAttribute,
   inject,
   signal,
 } from '@angular/core';
@@ -21,8 +23,8 @@ import {
   exportAs: 'popover',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="relative inline-flex">
-      <div (click)="toggle($event)" class="inline-flex">
+    <div class="relative" [class.inline-flex]="!block" [class.w-full]="block">
+      <div (click)="toggle($event)" class="inline-flex" [class.w-full]="block">
         <ng-content select="[trigger]"></ng-content>
       </div>
       @if (open()) {
@@ -41,7 +43,13 @@ import {
 export class PopoverComponent {
   private host = inject(ElementRef<HTMLElement>);
   @Input() align: 'start' | 'end' = 'start';
+  /** Full-width mode for stacked menus (e.g. card-detail sidebar). */
+  @Input({ transform: booleanAttribute }) block = false;
   readonly open = signal(false);
+
+  @HostBinding('class.block') get hostBlock() {
+    return this.block;
+  }
 
   toggle(ev: Event) {
     ev.stopPropagation();

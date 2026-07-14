@@ -71,7 +71,7 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
     ChecklistPanelComponent,
   ],
   template: `
-    <app-modal [open]="true" width="max-w-3xl" (closed)="close()">
+    <app-modal [open]="true" width="max-w-5xl" (closed)="close()">
       @if (loading()) {
         <div class="flex h-64 items-center justify-center">
           <app-spinner [size]="36" />
@@ -120,7 +120,10 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
           <!-- Two columns -->
           <div class="md:grid md:grid-cols-[1fr_200px] md:gap-6">
             <!-- ===================== MAIN COLUMN ===================== -->
-            <div class="space-y-6">
+            <!-- min-w-0: sin esto, la columna 1fr no puede encoger por debajo
+                 de su contenido (URLs/código largos) y empuja el sidebar fuera
+                 del modal. -->
+            <div class="min-w-0 space-y-6">
               <!-- Summary: members + labels -->
               @if ((c.members?.length || c.labels?.length)) {
                 <div class="flex flex-wrap gap-6">
@@ -194,7 +197,7 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
                     (click)="startEditDesc(c)"
                   >
                     @if (c.description) {
-                      <p class="whitespace-pre-wrap text-card-foreground">{{ c.description }}</p>
+                      <p class="whitespace-pre-wrap break-words text-card-foreground">{{ c.description }}</p>
                     } @else {
                       <p class="text-slate-400">Añade una descripción…</p>
                     }
@@ -213,7 +216,7 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
                 <div class="relative">
                   <div
                     #richEditor
-                    class="prose-sm min-h-[120px] w-full rounded-md border border-slate-300 bg-card px-3 py-2.5 text-sm leading-relaxed text-card-foreground focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
+                    class="prose-sm min-h-[120px] w-full overflow-x-auto break-words rounded-md border border-slate-300 bg-card px-3 py-2.5 text-sm leading-relaxed text-card-foreground focus:border-[#2563eb] focus:outline-none focus:ring-1 focus:ring-[#2563eb]"
                     [contentEditable]="true"
                     [innerHTML]="bodyHtmlSafe()"
                     (paste)="onRichPaste($event, richEditor)"
@@ -425,7 +428,7 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
                           <span class="text-xs text-slate-400">{{ relativeTime(cm.created_at) }}</span>
                         </div>
                         <div class="mt-1 rounded-md bg-slate-50 px-3 py-2 text-sm">
-                          <p class="whitespace-pre-wrap text-card-foreground">{{ cm.body }}</p>
+                          <p class="whitespace-pre-wrap break-words text-card-foreground">{{ cm.body }}</p>
                         </div>
                         @if (cm.member_id === currentId()) {
                           <button
@@ -451,7 +454,7 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
               </h3>
 
               <!-- Members -->
-              <app-popover #membersPop="popover" align="end">
+              <app-popover #membersPop="popover" align="end" block>
                 <button trigger [class]="sideBtn">
                   <app-icon name="users" [size]="16" /> Miembros
                 </button>
@@ -485,7 +488,7 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
               </app-popover>
 
               <!-- Labels -->
-              <app-popover #labelsPop="popover" align="end">
+              <app-popover #labelsPop="popover" align="end" block>
                 <button trigger [class]="sideBtn">
                   <app-icon name="tag" [size]="16" /> Etiquetas
                 </button>
@@ -539,7 +542,7 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
               </app-popover>
 
               <!-- Due date -->
-              <app-popover #duePop="popover" align="end">
+              <app-popover #duePop="popover" align="end" block>
                 <button trigger [class]="sideBtn">
                   <app-icon name="calendar" [size]="16" /> Fecha de entrega
                 </button>
@@ -573,7 +576,7 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
               </app-popover>
 
               <!-- Cover -->
-              <app-popover #coverPop="popover" align="end">
+              <app-popover #coverPop="popover" align="end" block>
                 <button trigger [class]="sideBtn">
                   <app-icon name="eye" [size]="16" /> Cubierta
                 </button>
@@ -650,7 +653,7 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
               </app-popover>
 
               <!-- Mover a tablero -->
-              <app-popover #movePop="popover" align="end">
+              <app-popover #movePop="popover" align="end" block>
                 <button trigger [class]="sideBtn" (click)="openMove()">
                   <app-icon name="arrow-left" [size]="16" /> Mover
                 </button>
