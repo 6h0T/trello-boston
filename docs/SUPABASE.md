@@ -39,6 +39,7 @@ Tienes dos caminos:
 1. Entra a tu proyecto → **SQL Editor** → **New query**.
 2. Pega y ejecuta **`docs/migrations/001_schema.sql`** (tablas, índices y RLS).
 3. Pega y ejecuta **`docs/migrations/002_seed_and_realtime.sql`** (Realtime + datos de ejemplo).
+4. Pega y ejecuta **`docs/migrations/005_roles_and_rls.sql`** (roles admin/empleado + RLS por membresía de tablero).
 
 ### Opción B — Supabase CLI
 ```bash
@@ -47,6 +48,7 @@ supabase db push           # si usas la carpeta de migraciones del CLI
 # o directamente:
 psql "$DATABASE_URL" -f docs/migrations/001_schema.sql
 psql "$DATABASE_URL" -f docs/migrations/002_seed_and_realtime.sql
+psql "$DATABASE_URL" -f docs/migrations/005_roles_and_rls.sql
 ```
 
 > En este repo las tablas **ya fueron creadas** vía el MCP de Supabase. Estos scripts sirven para recrearlas en un proyecto limpio o documentar el esquema.
