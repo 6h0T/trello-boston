@@ -41,6 +41,8 @@ as $$
 $$;
 
 grant execute on function public.is_admin(), public.can_access_board(uuid), public.can_access_card(uuid) to authenticated;
+-- Sin acceso anónimo vía RPC (el grant por defecto a PUBLIC los exponía)
+revoke execute on function public.is_admin(), public.can_access_board(uuid), public.can_access_card(uuid) from public, anon;
 
 -- 3) Solo un admin puede cambiar roles (ni siquiera el propio)
 create or replace function public.tb_members_protect_role()
@@ -54,6 +56,8 @@ begin
   return new;
 end;
 $$;
+
+revoke execute on function public.tb_members_protect_role() from public, anon, authenticated;
 
 drop trigger if exists trg_tb_members_protect_role on public.tb_members;
 create trigger trg_tb_members_protect_role
