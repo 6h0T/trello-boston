@@ -34,7 +34,7 @@ import { AvatarComponent, IconComponent, PopoverComponent } from '../../shared/u
         title="Notificaciones"
         aria-label="Notificaciones"
       >
-        <app-icon name="inbox" [size]="18" />
+        <app-icon name="bell" [size]="18" />
         @if (unread() > 0) {
           <span
             class="absolute -top-1 -right-1 grid min-w-[18px] h-[18px] px-1 place-items-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none ring-2 ring-[#1d3969]"
@@ -60,7 +60,7 @@ import { AvatarComponent, IconComponent, PopoverComponent } from '../../shared/u
         <div class="max-h-96 overflow-y-auto">
           @if (items().length === 0) {
             <div class="flex flex-col items-center gap-2 px-4 py-10 text-center text-muted-foreground">
-              <app-icon name="inbox" [size]="28" />
+              <app-icon name="bell" [size]="28" />
               <p class="text-sm">No tienes notificaciones</p>
             </div>
           } @else {
@@ -120,6 +120,23 @@ export class NotificationsMenuComponent implements OnDestroy {
         return `${actor} comentó en «${title}»`;
       case 'card.mentioned':
         return title ? `${actor} te mencionó en «${title}»` : `${actor} te mencionó`;
+      case 'card.moved':
+        return `${actor} movió «${title}» a ${n.data?.['to_list'] ?? 'otra lista'}`;
+      case 'card.updated':
+        switch (n.data?.['field']) {
+          case 'title':
+            return `${actor} cambió el título de «${title}»`;
+          case 'description':
+            return `${actor} actualizó la descripción de «${title}»`;
+          case 'due_date':
+            return `${actor} cambió la fecha límite de «${title}»`;
+          case 'archived':
+            return n.data?.['archived'] === false
+              ? `${actor} restauró «${title}»`
+              : `${actor} archivó «${title}»`;
+          default:
+            return `${actor} actualizó «${title}»`;
+        }
       default:
         return n.type;
     }
