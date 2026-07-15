@@ -12,6 +12,11 @@ export class MembersService {
     return data as Member[];
   }
 
+  async updateRole(id: string, role: 'admin' | 'empleado'): Promise<void> {
+    const { error } = await this.sb.table('members').update({ role }).eq('id', id);
+    if (error) throw error;
+  }
+
   async create(name: string, email: string | null, color: string): Promise<Member> {
     const { data, error } = await this.sb
       .table('members')

@@ -3,12 +3,15 @@
 // to avoid mapping bugs across the feature teams.
 // ============================================================
 
+export type MemberRole = 'admin' | 'empleado';
+
 export interface Member {
   id: string;
   name: string;
   email?: string | null;
   avatar_url?: string | null;
   color: string;
+  role?: MemberRole;
   created_at?: string;
 }
 
