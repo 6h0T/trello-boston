@@ -40,6 +40,7 @@ Tienes dos caminos:
 2. Pega y ejecuta **`docs/migrations/001_schema.sql`** (tablas, índices y RLS).
 3. Pega y ejecuta **`docs/migrations/002_seed_and_realtime.sql`** (Realtime + datos de ejemplo).
 4. Pega y ejecuta **`docs/migrations/005_roles_and_rls.sql`** (roles admin/empleado + RLS por membresía de tablero).
+5. Pega y ejecuta **`docs/migrations/006_card_notifications.sql`** (triggers de notificaciones por actividad en tarjetas).
 
 ### Opción B — Supabase CLI
 ```bash
@@ -49,6 +50,7 @@ supabase db push           # si usas la carpeta de migraciones del CLI
 psql "$DATABASE_URL" -f docs/migrations/001_schema.sql
 psql "$DATABASE_URL" -f docs/migrations/002_seed_and_realtime.sql
 psql "$DATABASE_URL" -f docs/migrations/005_roles_and_rls.sql
+psql "$DATABASE_URL" -f docs/migrations/006_card_notifications.sql
 ```
 
 > En este repo las tablas **ya fueron creadas** vía el MCP de Supabase. Estos scripts sirven para recrearlas en un proyecto limpio o documentar el esquema.
