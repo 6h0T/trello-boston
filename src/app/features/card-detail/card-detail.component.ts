@@ -418,12 +418,40 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
                       [(ngModel)]="commentDraft"
                       [appMentions]="allMembers()"
                       (keydown.enter)="$any($event).ctrlKey && addComment(c)"
+                      (paste)="onCommentPaste($event)"
                     ></textarea>
+                    @if (pendingCommentImages().length || uploadingCommentImage()) {
+                      <div class="mt-1.5 flex flex-wrap items-center gap-2">
+                        @for (img of pendingCommentImages(); track img) {
+                          <div class="relative">
+                            <img
+                              [src]="img"
+                              alt="Imagen pegada"
+                              class="h-16 w-16 rounded-md border border-slate-200 object-cover"
+                            />
+                            <button
+                              class="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-slate-700 text-white hover:bg-red-600"
+                              title="Quitar imagen"
+                              (click)="removePendingCommentImage(img)"
+                            >
+                              <app-icon name="x" [size]="10" />
+                            </button>
+                          </div>
+                        }
+                        @if (uploadingCommentImage()) {
+                          <span class="text-xs text-slate-400">Subiendo imagen…</span>
+                        }
+                      </div>
+                    }
                     <div class="mt-1.5">
                       <app-button
                         size="sm"
                         variant="primary"
-                        [disabled]="!commentDraft.trim() || sendingComment()"
+                        [disabled]="
+                          (!commentDraft.trim() && !pendingCommentImages().length) ||
+                          sendingComment() ||
+                          uploadingCommentImage()
+                        "
                         (click)="addComment(c)"
                       >
                         <app-icon name="send" [size]="14" /> Enviar
@@ -445,7 +473,20 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
                           <span class="text-xs text-slate-400">{{ relativeTime(cm.created_at) }}</span>
                         </div>
                         <div class="mt-1 rounded-md bg-slate-50 px-3 py-2 text-sm">
-                          <p class="whitespace-pre-wrap break-words text-card-foreground">{{ cm.body }}</p>
+                          @for (part of commentParts(cm.body); track $index) {
+                            @if (part.type === 'image') {
+                              <a [href]="part.value" target="_blank" rel="noopener">
+                                <img
+                                  [src]="part.value"
+                                  alt="Imagen adjunta"
+                                  class="my-1 max-h-64 max-w-full rounded-md border border-slate-200"
+                                  loading="lazy"
+                                />
+                              </a>
+                            } @else {
+                              <p class="whitespace-pre-wrap break-words text-card-foreground">{{ part.value }}</p>
+                            }
+                          }
                         </div>
                         @if (cm.member_id === currentId()) {
                           <button
@@ -954,14 +995,76 @@ export class CardDetailComponent {
   }
 
   // ---------- comments ----------
+  /** Uploaded-but-unsent images pasted into the comment composer. */
+  readonly pendingCommentImages = signal<string[]>([]);
+  readonly uploadingCommentImage = signal(false);
+
+  /**
+   * Paste handler for the comment textarea: images from the clipboard are
+   * uploaded to Storage and queued as pending attachments; plain text pastes
+   * fall through to the default behaviour.
+   */
+  async onCommentPaste(ev: ClipboardEvent) {
+    const items = ev.clipboardData?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.kind === 'file' && it.type.startsWith('image/')) {
+        const f = it.getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (!files.length) return; // let text paste happen normally
+
+    ev.preventDefault();
+    this.uploadingCommentImage.set(true);
+    try {
+      for (const file of files) {
+        const url = await this.storageSvc.upload(file, 'comment.png', 'comments');
+        this.pendingCommentImages.update((list) => [...list, url]);
+      }
+    } catch {
+      this.toast.error('No se pudo subir la imagen pegada');
+    } finally {
+      this.uploadingCommentImage.set(false);
+    }
+  }
+
+  removePendingCommentImage(url: string) {
+    this.pendingCommentImages.update((list) => list.filter((u) => u !== url));
+  }
+
+  /** Split a comment body into text and image parts (`![…](url)` markers). */
+  commentParts(body: string): { type: 'text' | 'image'; value: string }[] {
+    const parts: { type: 'text' | 'image'; value: string }[] = [];
+    const re = /!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/g;
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(body))) {
+      const text = body.slice(last, m.index).trim();
+      if (text) parts.push({ type: 'text', value: text });
+      parts.push({ type: 'image', value: m[1] });
+      last = m.index + m[0].length;
+    }
+    const tail = body.slice(last).trim();
+    if (tail) parts.push({ type: 'text', value: tail });
+    if (!parts.length) parts.push({ type: 'text', value: body });
+    return parts;
+  }
+
   async addComment(c: Card) {
-    const body = this.commentDraft.trim();
-    if (!body) return;
+    const text = this.commentDraft.trim();
+    const images = this.pendingCommentImages();
+    if (!text && !images.length) return;
+    const markers = images.map((url) => `![imagen](${url})`).join('\n');
+    const body = [text, markers].filter(Boolean).join('\n');
     const memberId = this.currentId();
     this.sendingComment.set(true);
     try {
       await this.commentsSvc.add(c.id, memberId, body);
       this.commentDraft = '';
+      this.pendingCommentImages.set([]);
       await this.notifyMentions(c, extractMentions(body, this.allMembers()));
       if (c.board_id) {
         try {
