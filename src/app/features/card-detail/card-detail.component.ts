@@ -495,13 +495,46 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
                         <div class="mt-1 rounded-md bg-slate-50 px-3 py-2 text-sm">
                           @for (part of commentParts(cm.body); track $index) {
                             @if (part.type === 'image') {
-                              <a [href]="part.value" target="_blank" rel="noopener">
-                                <img
+                              <div class="group/media relative my-1 inline-block">
+                                <button type="button" (click)="openLightbox(part.value, part.name || 'imagen')">
+                                  <img
+                                    [src]="part.value"
+                                    [alt]="part.name || 'Imagen adjunta'"
+                                    class="max-h-64 max-w-full cursor-zoom-in rounded-md border border-slate-200"
+                                    loading="lazy"
+                                  />
+                                </button>
+                                <a
+                                  [href]="partDownloadUrl(part)"
+                                  class="absolute right-1.5 top-1.5 hidden rounded-md bg-slate-900/70 p-1.5 text-white hover:bg-slate-900 group-hover/media:block"
+                                  [title]="'Descargar ' + (part.name || 'imagen')"
+                                >
+                                  <app-icon name="download" [size]="14" />
+                                </a>
+                              </div>
+                            } @else if (part.type === 'video') {
+                              <div class="group/media relative my-1">
+                                <video
                                   [src]="part.value"
-                                  alt="Imagen adjunta"
-                                  class="my-1 max-h-64 max-w-full rounded-md border border-slate-200"
-                                  loading="lazy"
-                                />
+                                  controls
+                                  class="max-h-64 max-w-full rounded-md border border-slate-200 bg-black"
+                                ></video>
+                                <a
+                                  [href]="partDownloadUrl(part)"
+                                  class="absolute right-1.5 top-1.5 hidden rounded-md bg-slate-900/70 p-1.5 text-white hover:bg-slate-900 group-hover/media:block"
+                                  [title]="'Descargar ' + (part.name || 'video')"
+                                >
+                                  <app-icon name="download" [size]="14" />
+                                </a>
+                              </div>
+                            } @else if (part.type === 'file') {
+                              <a
+                                [href]="partDownloadUrl(part)"
+                                class="my-1 inline-flex max-w-full items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-[#2563eb] hover:bg-slate-100"
+                                [title]="'Descargar ' + (part.name || 'archivo')"
+                              >
+                                <app-icon name="download" [size]="14" class="shrink-0" />
+                                <span class="truncate">{{ part.name || 'archivo' }}</span>
                               </a>
                             } @else {
                               <p class="whitespace-pre-wrap break-words text-card-foreground">{{ part.value }}</p>
@@ -809,6 +842,36 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
         </div>
       }
     </app-modal>
+
+    @if (lightbox(); as lb) {
+      <div
+        class="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-6"
+        (click)="closeLightbox()"
+      >
+        <img
+          [src]="lb.url"
+          [alt]="lb.name"
+          class="max-h-full max-w-full rounded-md"
+          (click)="$event.stopPropagation()"
+        />
+        <div class="absolute right-4 top-4 flex gap-2" (click)="$event.stopPropagation()">
+          <a
+            [href]="lightboxDownloadUrl()"
+            class="rounded-md bg-white/10 p-2 text-white hover:bg-white/20"
+            [title]="'Descargar ' + lb.name"
+          >
+            <app-icon name="download" [size]="18" />
+          </a>
+          <button
+            class="rounded-md bg-white/10 p-2 text-white hover:bg-white/20"
+            title="Cerrar"
+            (click)="closeLightbox()"
+          >
+            <app-icon name="x" [size]="18" />
+          </button>
+        </div>
+      </div>
+    }
   `,
 })
 export class CardDetailComponent {
@@ -1063,22 +1126,34 @@ export class CardDetailComponent {
     this.pendingCommentFiles.update((list) => list.filter((f) => f.url !== url));
   }
 
-  /** Split a comment body into text and image parts (`![…](url)` markers). */
-  commentParts(body: string): { type: 'text' | 'image'; value: string }[] {
-    const parts: { type: 'text' | 'image'; value: string }[] = [];
-    const re = /!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/g;
-    let last = 0;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(body))) {
-      const text = body.slice(last, m.index).trim();
-      if (text) parts.push({ type: 'text', value: text });
-      parts.push({ type: 'image', value: m[1] });
-      last = m.index + m[0].length;
-    }
-    const tail = body.slice(last).trim();
-    if (tail) parts.push({ type: 'text', value: tail });
-    if (!parts.length) parts.push({ type: 'text', value: body });
-    return parts;
+  /** Split a comment body into text / image / video / file parts. */
+  commentParts(body: string): CommentPart[] {
+    return parseCommentBody(body);
+  }
+
+  partDownloadUrl(part: CommentPart): string {
+    return downloadUrl(part.value, part.name || 'archivo');
+  }
+
+  // ---------- lightbox ----------
+  readonly lightbox = signal<{ url: string; name: string } | null>(null);
+
+  openLightbox(url: string, name: string) {
+    this.lightbox.set({ url, name });
+  }
+
+  closeLightbox() {
+    this.lightbox.set(null);
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape() {
+    this.closeLightbox();
+  }
+
+  lightboxDownloadUrl(): string {
+    const lb = this.lightbox();
+    return lb ? downloadUrl(lb.url, lb.name) : '';
   }
 
   async addComment(c: Card) {
