@@ -23,7 +23,6 @@ import {
 
 import {
   Attachment,
-  AttachmentType,
   Board,
   Card,
   CardCoverSize,
@@ -297,7 +296,7 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
                       #fileInput
                       type="file"
                       class="hidden"
-                      accept="image/*,video/*"
+                      [accept]="attachmentAccept"
                       multiple
                       (change)="onFilesSelected(c, $event, fileInput)"
                     />
@@ -355,19 +354,30 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
                             rel="noopener"
                             class="flex h-28 w-full flex-col items-center justify-center gap-2 p-2 text-center text-sm text-[#2563eb] hover:bg-slate-100"
                           >
-                            <app-icon name="tag" [size]="22" />
+                            <app-icon [name]="a.type === 'file' ? 'download' : 'tag'" [size]="22" />
                             <span class="line-clamp-2 break-all">{{ a.name }}</span>
                           </a>
                         }
                         <div class="flex items-center justify-between gap-1 px-2 py-1">
                           <span class="truncate text-xs text-slate-600" [title]="a.name">{{ a.name }}</span>
-                          <button
-                            class="shrink-0 rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                            title="Eliminar adjunto"
-                            (click)="deleteAttachment(a)"
-                          >
-                            <app-icon name="trash" [size]="14" />
-                          </button>
+                          <div class="flex shrink-0 items-center">
+                            @if (a.type !== 'link') {
+                              <a
+                                class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-[#2563eb]"
+                                title="Descargar"
+                                [href]="attachmentDownloadUrl(a)"
+                              >
+                                <app-icon name="download" [size]="14" />
+                              </a>
+                            }
+                            <button
+                              class="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                              title="Eliminar adjunto"
+                              (click)="deleteAttachment(a)"
+                            >
+                              <app-icon name="trash" [size]="14" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     }
@@ -1498,19 +1508,35 @@ export class CardDetailComponent {
     }
   }
 
+  readonly attachmentAccept = ATTACHMENT_ACCEPT;
+
+  attachmentDownloadUrl(a: Attachment): string {
+    return downloadUrl(a.url, a.name);
+  }
+
   async onFilesSelected(c: Card, ev: Event, input: HTMLInputElement) {
     const files = Array.from(input.files ?? []);
     input.value = ''; // allow re-selecting the same file
     if (!files.length) return;
+    const valid: File[] = [];
+    for (const file of files) {
+      if (!isAllowedAttachment(file)) {
+        this.toast.error(`"${file.name}" no es un tipo de archivo permitido`);
+      } else if (exceedsUploadLimit(file)) {
+        this.toast.error(`"${file.name}" supera el límite de 5 MB`);
+      } else {
+        valid.push(file);
+      }
+    }
+    if (!valid.length) return;
     this.uploadingFile.set(true);
     try {
-      for (const file of files) {
+      for (const file of valid) {
         const url = await this.storageSvc.upload(file);
-        const type: AttachmentType = file.type.startsWith('video/') ? 'video' : 'image';
-        await this.attachmentsSvc.add(c.id, file.name, url, type);
+        await this.attachmentsSvc.add(c.id, file.name, url, attachmentTypeFor(file));
       }
       await this.refreshAttachments(c.id);
-      this.toast.success(files.length > 1 ? 'Archivos subidos' : 'Archivo subido');
+      this.toast.success(valid.length > 1 ? 'Archivos subidos' : 'Archivo subido');
     } catch (e: any) {
       this.toast.error('No se pudieron subir los archivos');
     } finally {
