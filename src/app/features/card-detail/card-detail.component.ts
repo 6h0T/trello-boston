@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  HostListener,
   inject,
   signal,
 } from '@angular/core';
@@ -33,6 +34,16 @@ import {
 } from '../../core/models/models';
 import { formatDue, isDueSoon, isOverdue, relativeTime, toDateTimeLocal, fromDateTimeLocal } from '../../core/util/date';
 import { extractMentions, htmlToText, newMentions } from '../../core/util/mentions';
+import {
+  ATTACHMENT_ACCEPT,
+  attachmentTypeFor,
+  commentMarker,
+  downloadUrl,
+  exceedsUploadLimit,
+  isAllowedAttachment,
+  parseCommentBody,
+  type CommentPart,
+} from '../../core/util/uploads';
 
 import { BoardStore } from '../../core/board.store';
 import { CardsService } from '../../core/services/cards.service';
@@ -420,26 +431,35 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
                       (keydown.enter)="$any($event).ctrlKey && addComment(c)"
                       (paste)="onCommentPaste($event)"
                     ></textarea>
-                    @if (pendingCommentImages().length || uploadingCommentImage()) {
+                    @if (pendingCommentFiles().length || uploadingCommentFile()) {
                       <div class="mt-1.5 flex flex-wrap items-center gap-2">
-                        @for (img of pendingCommentImages(); track img) {
+                        @for (f of pendingCommentFiles(); track f.url) {
                           <div class="relative">
-                            <img
-                              [src]="img"
-                              alt="Imagen pegada"
-                              class="h-16 w-16 rounded-md border border-slate-200 object-cover"
-                            />
+                            @if (f.isImage) {
+                              <img
+                                [src]="f.url"
+                                [alt]="f.name"
+                                class="h-16 w-16 rounded-md border border-slate-200 object-cover"
+                              />
+                            } @else {
+                              <span
+                                class="flex h-16 max-w-44 items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-xs text-slate-600"
+                              >
+                                <app-icon name="paperclip" [size]="14" class="shrink-0" />
+                                <span class="truncate" [title]="f.name">{{ f.name }}</span>
+                              </span>
+                            }
                             <button
                               class="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-slate-700 text-white hover:bg-red-600"
-                              title="Quitar imagen"
-                              (click)="removePendingCommentImage(img)"
+                              title="Quitar archivo"
+                              (click)="removePendingCommentFile(f.url)"
                             >
                               <app-icon name="x" [size]="10" />
                             </button>
                           </div>
                         }
-                        @if (uploadingCommentImage()) {
-                          <span class="text-xs text-slate-400">Subiendo imagen…</span>
+                        @if (uploadingCommentFile()) {
+                          <span class="text-xs text-slate-400">Subiendo archivo…</span>
                         }
                       </div>
                     }
@@ -448,9 +468,9 @@ import { ChecklistPanelComponent } from './panels/checklist-panel.component';
                         size="sm"
                         variant="primary"
                         [disabled]="
-                          (!commentDraft.trim() && !pendingCommentImages().length) ||
+                          (!commentDraft.trim() && !pendingCommentFiles().length) ||
                           sendingComment() ||
-                          uploadingCommentImage()
+                          uploadingCommentFile()
                         "
                         (click)="addComment(c)"
                       >
@@ -995,12 +1015,12 @@ export class CardDetailComponent {
   }
 
   // ---------- comments ----------
-  /** Uploaded-but-unsent images pasted into the comment composer. */
-  readonly pendingCommentImages = signal<string[]>([]);
-  readonly uploadingCommentImage = signal(false);
+  /** Uploaded-but-unsent files pasted into the comment composer. */
+  readonly pendingCommentFiles = signal<{ name: string; url: string; isImage: boolean }[]>([]);
+  readonly uploadingCommentFile = signal(false);
 
   /**
-   * Paste handler for the comment textarea: images from the clipboard are
+   * Paste handler for the comment textarea: files from the clipboard are
    * uploaded to Storage and queued as pending attachments; plain text pastes
    * fall through to the default behaviour.
    */
@@ -1010,7 +1030,7 @@ export class CardDetailComponent {
     const files: File[] = [];
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
-      if (it.kind === 'file' && it.type.startsWith('image/')) {
+      if (it.kind === 'file') {
         const f = it.getAsFile();
         if (f) files.push(f);
       }
@@ -1018,21 +1038,29 @@ export class CardDetailComponent {
     if (!files.length) return; // let text paste happen normally
 
     ev.preventDefault();
-    this.uploadingCommentImage.set(true);
+    this.uploadingCommentFile.set(true);
     try {
       for (const file of files) {
-        const url = await this.storageSvc.upload(file, 'comment.png', 'comments');
-        this.pendingCommentImages.update((list) => [...list, url]);
+        const name = file.name || 'archivo';
+        if (exceedsUploadLimit(file)) {
+          this.toast.error(`"${name}" supera el límite de 5 MB`);
+          continue;
+        }
+        const url = await this.storageSvc.upload(file, name, 'comments');
+        this.pendingCommentFiles.update((list) => [
+          ...list,
+          { name, url, isImage: file.type.startsWith('image/') },
+        ]);
       }
     } catch {
-      this.toast.error('No se pudo subir la imagen pegada');
+      this.toast.error('No se pudo subir el archivo pegado');
     } finally {
-      this.uploadingCommentImage.set(false);
+      this.uploadingCommentFile.set(false);
     }
   }
 
-  removePendingCommentImage(url: string) {
-    this.pendingCommentImages.update((list) => list.filter((u) => u !== url));
+  removePendingCommentFile(url: string) {
+    this.pendingCommentFiles.update((list) => list.filter((f) => f.url !== url));
   }
 
   /** Split a comment body into text and image parts (`![…](url)` markers). */
@@ -1055,16 +1083,16 @@ export class CardDetailComponent {
 
   async addComment(c: Card) {
     const text = this.commentDraft.trim();
-    const images = this.pendingCommentImages();
-    if (!text && !images.length) return;
-    const markers = images.map((url) => `![imagen](${url})`).join('\n');
+    const files = this.pendingCommentFiles();
+    if (!text && !files.length) return;
+    const markers = files.map((f) => commentMarker(f.name, f.url, f.isImage)).join('\n');
     const body = [text, markers].filter(Boolean).join('\n');
     const memberId = this.currentId();
     this.sendingComment.set(true);
     try {
       await this.commentsSvc.add(c.id, memberId, body);
       this.commentDraft = '';
-      this.pendingCommentImages.set([]);
+      this.pendingCommentFiles.set([]);
       await this.notifyMentions(c, extractMentions(body, this.allMembers()));
       if (c.board_id) {
         try {
